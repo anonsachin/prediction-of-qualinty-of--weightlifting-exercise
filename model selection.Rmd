@@ -1,0 +1,183 @@
+---
+title: "Prediction of qualitative execution of weight lifting excersice"
+author: "sachin gowda"
+date: "29 January 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(MASS)
+library(gbm)
+require(gridExtra)
+```
+
+# Introduction
+
+Here we are focusing on building a model to predict how **well** a particular activity(*weight lifting*) is being done rather than, which activity is being done. Using activity trackers such as fitbits, apple watch's, etc people are procducing a lot of data on their physical activities, to improve their health or just interested in the technology. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har>.(The weight lifting exercise dataset)
+
+# Analysis
+
+## Cleaning the data
+
+There are a lot of columns with missing values in them so we first have to remove these columns from the dataset, and converting all the remainin integer columns into numeric.
+```{r}
+tr<-read.csv("training.csv")
+#selecting columns with NA
+narm<-sapply(tr, function(x) any(is.na(x)))
+#selecting factors with NA
+narmfactor <-sapply(tr, function(x) any(levels(x)==""))
+#removing columns with NA
+tr<-tr[,-which(narm|narmfactor)]
+#coercing integers to numeric
+for (i in 8:59) {
+  tr[,i]<-as.numeric(tr[,i])
+}
+
+```
+
+## Building the model 
+
+During the data collection process the sensors were placed on the dumbbell,on the hip with the use of a belt, on the arm and forearm by placing it on the glove. So we will divide the training data set into subsets for each sensor placement.
+```{r}
+set.seed(4567)
+intrain <- createDataPartition(tr$classe,p=0.85,list = F)
+test2<-tr[-intrain,]
+tr<-tr[intrain,]
+intrain <- createDataPartition(tr$classe,p=0.75,list = F)
+tst<-tr[-intrain,]
+tr<-tr[intrain,]
+belt<-tr[,c(grep("belt",names(tr)),60)]
+arm<-tr[,c(grep("arm",names(tr))[1:13],60)]
+forearm<-tr[,c(grep("forearm",names(tr)),60)]
+dumbell<-tr[,c(grep("dumbbell",names(tr)),60)]
+```
+
+We will  build an lda model for each of this to define how well each of these sensors can predict the outcome on their own.
+```{r}
+belttest<-tst[,c(grep("belt",names(tst)),60)]
+armtest<-tst[,c(grep("arm",names(tst))[1:13],60)]
+forearmtest<-tst[,c(grep("forearm",names(tst)),60)]
+dumbelltest<-tst[,c(grep("dumbbell",names(tst)),60)]
+dumbelltest2<-test2[,c(grep("dumbbell",names(test2)),60)]
+dumbelltest2<-test2[,c(grep("dumbbell",names(test2)),60)]
+forearmtest2<-test2[,c(grep("forearm",names(test2)),60)]
+armtest2<-test2[,c(grep("arm",names(test2))[1:13],60)]
+belttest2<-test2[,c(grep("belt",names(test2)),60)]
+fitbelt<-lda(classe~.,data= belt)
+fitdumb<-lda(classe~.,data= dumbell)
+fitfore<-lda(classe~.,data= forearm)
+fitarm<-lda(classe~.,data= arm)
+predblet<-predict(fitbelt,belttest)
+predarm<-predict(fitarm,armtest)
+predfore<-predict(fitfore,forearmtest)
+preddumb<-predict(fitdumb,dumbelltest)
+```
+
+### Lets see how well each of these differentiate the different catagories
+
+## BELT
+
+```{r}
+confusionMatrix(predblet$class,belttest$classe)
+```
+
+How well the lda splits each of the different classes
+
+```{r}
+fitbelt$svd^2/sum(fitbelt$svd^2)
+```
+### The plot
+```{r}
+d<-data.frame(lda = predblet$x,class=belttest$classe)
+pl<-ggplot(aes(x=lda.LD1,y=lda.LD2,col = class,alpha = 0.5),data = d)
+pl+geom_point()+labs(title ="BELT",y = "lda 2",x = "lda1")
+```
+
+## ARM
+
+```{r}
+confusionMatrix(predarm$class,armtest$classe)
+```
+
+How well the lda splits each of the different classes
+
+```{r}
+fitarm$svd^2/sum(fitarm$svd^2)
+```
+### The plot
+```{r}
+d<-data.frame(lda = predarm$x,class=armtest$classe)
+pl<-ggplot(aes(x=lda.LD1,y=lda.LD2,col = class,alpha = 0.5),data = d)
+pl+geom_point()+labs(title ="ARM",y = "lda 2",x = "lda1")
+```
+
+## FOREARM (*GLOVE*)
+
+```{r}
+confusionMatrix(predfore$class,forearmtest$classe)
+```
+
+How well the lda splits each of the different classes
+
+```{r}
+fitfore$svd^2/sum(fitfore$svd^2)
+```
+### The plot
+```{r}
+d<-data.frame(lda = predfore$x,class=forearmtest$classe)
+pl<-ggplot(aes(x=lda.LD1,y=lda.LD2,col = class,alpha = 0.5),data = d)
+pl+geom_point()+labs(title ="FOREARM",y = "lda 2",x = "lda1")
+```
+
+## DUMBBELL
+
+```{r}
+confusionMatrix(preddumb$class,dumbelltest$classe)
+```
+
+How well the lda splits each of the different classes
+
+```{r}
+fitdumb$svd^2/sum(fitdumb$svd^2)
+```
+### The plot
+```{r}
+d<-data.frame(lda = preddumb$x,class=dumbelltest$classe)
+pl<-ggplot(aes(x=lda.LD1,y=lda.LD2,col = class,alpha = 0.5),data = d)
+pl+geom_point()+labs(title ="DUMBELL",y = "lda 2",x = "lda1")
+```
+
+#  Ensembling 
+
+As you can see these individually do not do a very good job of segregating the different excecutions. Hence it would be best to combone them in an optimal way. The lda gives us the best they can seprate out the different classes individualy, then combining it these individual models with a boosting technique like *"gbm"*, which is what we use now will give the best combination of the models based on their individual ability to seperate the classes.
+
+```{r}
+g<-data.frame(pred1=predarm,pred2=predblet,pred3=predfore,pre4=preddumb,classe=tst$classe)
+modelgbm<-train(classe~.,data = g,method="gbm",verbose =F)
+predblet2<-predict(fitbelt,belttest2)
+predarm2<-predict(fitarm,armtest2)
+predfore2<-predict(fitfore,forearmtest2)
+preddumb2<-predict(fitdumb,dumbelltest2)
+g2<-data.frame(pred1=predarm2,pred2=predblet2,pred3=predfore2,pre4=preddumb2,classe=test2$classe)
+predtes2<-predict(modelgbm,g2)
+```
+
+**Now lets see how well this classifies the data.**
+
+```{r}
+confusionMatrix(predtes2,test2$classe)
+```
+
+It does a very good job of segregating the data with accuracy **87%** as shown above.
+
+# Result
+
+As seen above after ensembling the different models the new model becomes very good at predicting if the particular exercise which in this case is lifting a relativly light duumbbell of 1.25kg is done properly or not based on the sensor data. The accuracy is 87% and kappa value of 83%.
+
+# Appendix
+The source of the data for this project is from: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har>.If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Paper used
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.<https://web.archive.org/web/20161217164008/http://groupware.les.inf.puc-rio.br/work.jsf?p1=11201>
